@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Students – Admin – CompanyConnect</title>
+  <link rel="stylesheet" href="shared.css"/>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand" style="text-decoration:none;"><div class="brand-hex">⬡</div><div><div class="brand-name">CompanyConnect</div><div class="brand-sub">Admin Panel</div></div></a>
+    <div class="nav-links"><span id="navAdmin" style="color:rgba(255,255,255,0.7);font-size:13px;"></span><a href="admin-login.html" onclick="DB.set('currentAdmin',null)" class="btn-nav">Logout</a></div>
+  </nav>
+  <div class="app-layout">
+    <aside class="sidebar"><div class="sidebar-section"><div class="sidebar-label">Admin Menu</div><div id="sidebarLinks"></div></div></aside>
+    <main class="main-content">
+      <div class="page-header anim"><div class="breadcrumb">Admin / <span>Students</span></div><h1>All Students</h1><p>Manage and view all registered students.</p></div>
+
+      <!-- Filters -->
+      <div class="card anim anim-1 mb-4">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="form-group" style="flex:1;min-width:150px;margin:0;">
+            <label class="form-label">Search</label>
+            <input id="fSearch" class="form-control" placeholder="Name or Register No..." oninput="renderTable()"/>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Department</label>
+            <select id="fDept" class="form-control" onchange="renderTable()">
+              <option value="">All Depts</option>
+              <option>CSE</option><option>IT</option><option>AML</option><option>ADS</option>
+              <option>ECE</option><option>EEE</option><option>EIE</option><option>Bio</option><option>Chem</option><option>Mech</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Batch</label>
+            <select id="fBatch" class="form-control" onchange="renderTable()">
+              <option value="">All Batches</option>
+              <option>2022-26</option><option>2023-27</option><option>2024-28</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Domain</label>
+            <select id="fDomain" class="form-control" onchange="renderTable()">
+              <option value="">All Domains</option>
+              <option>Full Stack Web Development</option><option>AIML</option>
+              <option>Data Science Analytics</option><option>Cloud/DevOps</option>
+              <option>RPA</option><option>Cybersecurity</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card anim anim-2">
+        <div class="card-header">
+          <div class="card-title">Students (<span id="count">0</span>)</div>
+          <div class="card-tag">REGISTERED</div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Reg No</th><th>Dept</th><th>Batch</th><th>College</th><th>CGPA</th><th>Courses</th><th>Certs</th><th>Plan</th><th>Submissions</th></tr></thead>
+            <tbody id="studentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="shared.js"></script>
+  <script>
+    const admin = requireAdmin();
+    if (admin) {
+      document.getElementById('navAdmin').textContent = admin.name;
+      document.getElementById('sidebarLinks').innerHTML = buildAdminNav('admin-students.html');
+      renderTable();
+    }
+
+    function renderTable() {
+      const search = document.getElementById('fSearch').value.toLowerCase();
+      const dept = document.getElementById('fDept').value;
+      const batch = document.getElementById('fBatch').value;
+      const domain = document.getElementById('fDomain').value;
+      const users = DB.getArr('users').filter(u => u.role==='student');
+      const parts = DB.getArr('participation');
+
+      const filtered = users.filter(u =>
+        (!search || u.name?.toLowerCase().includes(search) || u.reg?.includes(search)) &&
+        (!dept || u.dept===dept) && (!batch || u.year===batch) && (!domain || u.domain===domain)
+      );
+
+      document.getElementById('count').textContent = filtered.length;
+      const tbody = document.getElementById('studentsTable');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text3);">No students found</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtered.map(u => {
+        const subs = parts.filter(p => p.studentEmail===u.email).length;
+        return `<tr>
+          <td class="td-name">${u.name}</td>
+          <td class="td-mono">${u.reg||'—'}</td>
+          <td><span class="badge badge-training">${u.dept||'—'}</span></td>
+          <td class="td-mono">${u.year||'—'}</td>
+          <td style="font-size:12px;">${u.college?.replace("St. Joseph's ","SJ ")}</td>
+          <td class="td-mono">${u.cgpa||'—'}</td>
+          <td class="td-mono">${u.courses||'0'}</td>
+          <td class="td-mono">${u.certs||'0'}</td>
+          <td><span class="badge ${u.plan==='PEP'?'badge-internship':'badge-submitted'}">${u.plan||'—'}</span></td>
+          <td class="td-mono">${subs}</td>
+        </tr>`;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

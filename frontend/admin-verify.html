@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Verify Proofs – Admin – CompanyConnect</title>
+  <link rel="stylesheet" href="shared.css"/>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand" style="text-decoration:none;"><div class="brand-hex">⬡</div><div><div class="brand-name">CompanyConnect</div><div class="brand-sub">Admin Panel</div></div></a>
+    <div class="nav-links"><span id="navAdmin" style="color:rgba(255,255,255,0.7);font-size:13px;"></span><a href="admin-login.html" onclick="DB.set('currentAdmin',null)" class="btn-nav">Logout</a></div>
+  </nav>
+  <div class="app-layout">
+    <aside class="sidebar"><div class="sidebar-section"><div class="sidebar-label">Admin Menu</div><div id="sidebarLinks"></div></div></aside>
+    <main class="main-content">
+      <div class="page-header anim"><div class="breadcrumb">Admin / <span>Verify Proofs</span></div><h1>Verify Proofs</h1><p>Review uploaded proofs and update verification status.</p></div>
+      <div id="alertBox"></div>
+
+      <!-- Filter -->
+      <div class="card anim anim-1 mb-4" style="padding:16px 20px;">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <select id="fStatus" class="form-control" style="width:160px;" onchange="renderProofs()">
+            <option value="">All Status</option>
+            <option value="Under Review">Under Review</option>
+            <option value="Verified">Verified</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Need Re-upload">Need Re-upload</option>
+          </select>
+          <select id="fDept" class="form-control" style="width:130px;" onchange="renderProofs()">
+            <option value="">All Depts</option>
+            <option>CSE</option><option>IT</option><option>AML</option><option>ADS</option>
+            <option>ECE</option><option>EEE</option><option>ECE</option><option>Mech</option>
+          </select>
+          <span class="text-mono" id="proofCount"></span>
+        </div>
+      </div>
+
+      <div id="proofCards" class="anim anim-2"></div>
+    </main>
+  </div>
+  <script src="shared.js"></script>
+  <script>
+    const admin = requireAdmin();
+    if (admin) {
+      document.getElementById('navAdmin').textContent = admin.name;
+      document.getElementById('sidebarLinks').innerHTML = buildAdminNav('admin-verify.html');
+      renderProofs();
+    }
+
+    function renderProofs() {
+      const statusFilter = document.getElementById('fStatus').value;
+      const deptFilter = document.getElementById('fDept').value;
+      let proofs = DB.getArr('proofs').filter(p =>
+        (!statusFilter || p.status===statusFilter) &&
+        (!deptFilter || p.dept===deptFilter)
+      );
+      document.getElementById('proofCount').textContent = `${proofs.length} proof(s)`;
+      const el = document.getElementById('proofCards');
+      if (proofs.length === 0) {
+        el.innerHTML = '<div class="card"><p style="text-align:center;padding:32px;" class="text-muted">No proofs found.</p></div>';
+        return;
+      }
+      el.innerHTML = proofs.map((p, idx) => {
+        const realIdx = DB.getArr('proofs').findIndex(pr => pr.id===p.id);
+        return `<div class="card mb-4">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+            <div>
+              <div style="font-family:var(--font-head);font-size:16px;font-weight:700;">${p.name}</div>
+              <div class="text-mono" style="margin-top:2px;">${p.dept} · ${p.program}</div>
+              <div style="margin-top:8px;display:flex;gap:8px;">${badgeHTML(p.status)}</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="text-mono">📄 ${p.fileName}</div>
+              <div class="text-mono" style="margin-top:4px;">${p.proofType}</div>
+              <div class="text-mono" style="margin-top:4px;">${formatDate(p.uploadedDate)}</div>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Admin Remarks</label>
+            <textarea id="remark_${realIdx}" class="form-control" rows="2" placeholder="e.g. Certificate not visible / Student name mismatch">${p.remark||''}</textarea>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-success btn-sm" onclick="setStatus(${realIdx},'Verified')">✅ Verify</button>
+            <button class="btn btn-danger btn-sm" onclick="setStatus(${realIdx},'Rejected')">❌ Reject</button>
+            <button class="btn btn-warning btn-sm" onclick="setStatus(${realIdx},'Need Re-upload')">🔄 Request Re-upload</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function setStatus(idx, status) {
+      const proofs = DB.getArr('proofs');
+      const remark = document.getElementById(`remark_${idx}`)?.value || '';
+      proofs[idx].status = status;
+      proofs[idx].remark = remark;
+      DB.set('proofs', proofs);
+
+      // Update participation verification
+      const parts = DB.getArr('participation');
+      parts.forEach(p => {
+        if (p.program===proofs[idx].program && p.studentEmail===proofs[idx].studentEmail) {
+          p.verification = status==='Verified' ? 'Verified' : status==='Rejected' ? 'Rejected' : 'Need Re-upload';
+        }
+      });
+      DB.set('participation', parts);
+      showAlert('alertBox', `Status updated to: ${status}`, 'success');
+      renderProofs();
+    }
+  </script>
+</body>
+</html>

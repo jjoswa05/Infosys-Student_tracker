@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Track Status – CompanyConnect</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .stage-tracker { display: flex; align-items: center; margin: 16px 0; }
+    .stage-step { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; position: relative; }
+    .stage-step:not(:last-child)::after { content:''; position:absolute; top:18px; left:50%; width:100%; height:2px; background:var(--border); z-index:0; }
+    .stage-step.done:not(:last-child)::after { background: var(--success); }
+    .stage-dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 1; border: 2px solid var(--border); background: var(--surface); }
+    .stage-step.done .stage-dot { background: var(--success); border-color: var(--success); color: #fff; }
+    .stage-step.current .stage-dot { background: var(--warning); border-color: var(--warning); color: #fff; }
+    .stage-label { font-size: 10px; font-family: var(--font-mono); color: var(--text3); text-align: center; }
+    .stage-step.done .stage-label { color: var(--success); }
+    .stage-step.current .stage-label { color: var(--warning); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand" style="text-decoration:none;"><div class="brand-hex">⬡</div><div><div class="brand-name">CompanyConnect</div><div class="brand-sub">Infosys Springboard Tracker</div></div></a>
+    <div class="nav-links"><span id="navUser" style="color:rgba(255,255,255,0.7);font-size:13px;"></span><a href="login.html" onclick="DB.set('currentUser',null)" class="btn-nav">Logout</a></div>
+  </nav>
+  <div class="app-layout">
+    <aside class="sidebar"><div class="sidebar-section"><div class="sidebar-label">Student Menu</div><div id="sidebarLinks"></div></div></aside>
+    <main class="main-content">
+      <div class="page-header anim"><div class="breadcrumb">Student / <span>Track Status</span></div><h1>Track Status</h1><p>Monitor your progress through each stage of the verification workflow.</p></div>
+      <div id="statusList" class="anim anim-1"></div>
+    </main>
+  </div>
+  <script src="shared.js"></script>
+  <script>
+    const user = requireStudent();
+    if (user) {
+      document.getElementById('navUser').textContent = user.name;
+      document.getElementById('sidebarLinks').innerHTML = buildStudentNav('status.html');
+      renderStatus();
+    }
+
+    function stageFor(sub, proof) {
+      const vs = proof ? proof.status : 'not uploaded';
+      if (sub.status==='Completed' && vs==='Verified') return 4;
+      if (vs==='Verified') return 3;
+      if (proof) return 2;
+      return 1;
+    }
+
+    function stageHTML(currentStage) {
+      const stages = [
+        { icon:'📝', label:'Submitted' },
+        { icon:'🔍', label:'Under Review' },
+        { icon:'✅', label:'Verified' },
+        { icon:'🏅', label:'Completed' },
+      ];
+      return `<div class="stage-tracker">${stages.map((s,i) => {
+        const cls = i < currentStage ? 'done' : i === currentStage-1 ? 'current' : '';
+        return `<div class="stage-step ${cls}"><div class="stage-dot">${i < currentStage ? '✓' : s.icon}</div><div class="stage-label">${s.label}</div></div>`;
+      }).join('')}</div>`;
+    }
+
+    function renderStatus() {
+      const parts = DB.getArr('participation').filter(p => p.studentEmail===user.email);
+      const proofs = DB.getArr('proofs');
+      const el = document.getElementById('statusList');
+      if (parts.length === 0) {
+        el.innerHTML = `<div class="card"><p style="text-align:center;padding:32px;" class="text-muted">No submissions yet. <a href="participation.html">Submit a participation →</a></p></div>`;
+        return;
+      }
+      el.innerHTML = parts.map(p => {
+        const proof = proofs.find(pr => pr.program===p.program && pr.studentEmail===p.studentEmail);
+        const stage = stageFor(p, proof);
+        return `<div class="card mb-4">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+            <div>
+              <div style="font-family:var(--font-head);font-size:17px;font-weight:700;">${p.program}</div>
+              <div style="display:flex;gap:8px;margin-top:6px;">${typeBadge(p.programType)} ${badgeHTML(p.status)}</div>
+            </div>
+            <div style="text-align:right;"><div class="text-mono">Reg ID: ${p.regId}</div><div class="text-mono">Enrolled: ${formatDate(p.enrollDate)}</div></div>
+          </div>
+          ${stageHTML(stage)}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+            <div>
+              <div class="text-muted" style="font-size:11px;margin-bottom:4px;">PROOF STATUS</div>
+              ${proof ? badgeHTML(proof.status) : '<span class="badge badge-submitted">Not Uploaded</span>'}
+              ${proof?.remark ? `<div style="margin-top:6px;font-size:12px;color:var(--danger);">Remark: ${proof.remark}</div>` : ''}
+            </div>
+            <div>
+              <div class="text-muted" style="font-size:11px;margin-bottom:4px;">VERIFICATION</div>
+              ${badgeHTML(p.verification)}
+            </div>
+          </div>
+          ${!proof ? `<div class="mt-4"><a href="upload.html" class="btn btn-outline btn-sm">📎 Upload Proof Now</a></div>` : ''}
+          ${proof?.status==='Need Re-upload' || proof?.status==='Rejected' ? `<div class="mt-4"><a href="upload.html" class="btn btn-warning btn-sm">🔄 Re-upload Proof</a></div>` : ''}
+        </div>`;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

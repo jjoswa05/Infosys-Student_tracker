@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Upload Proof – CompanyConnect</title>
+  <link rel="stylesheet" href="shared.css"/>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand" style="text-decoration:none;"><div class="brand-hex">⬡</div><div><div class="brand-name">CompanyConnect</div><div class="brand-sub">Infosys Springboard Tracker</div></div></a>
+    <div class="nav-links"><span id="navUser" style="color:rgba(255,255,255,0.7);font-size:13px;"></span><a href="login.html" onclick="DB.set('currentUser',null)" class="btn-nav">Logout</a></div>
+  </nav>
+  <div class="app-layout">
+    <aside class="sidebar"><div class="sidebar-section"><div class="sidebar-label">Student Menu</div><div id="sidebarLinks"></div></div></aside>
+    <main class="main-content">
+      <div class="page-header anim"><div class="breadcrumb">Student / <span>Upload Proof</span></div><h1>Upload Proof</h1><p>Upload your registration screenshot, certificate, or project proof.</p></div>
+      <div id="alertBox"></div>
+      <div class="grid-sidebar anim anim-1">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Upload Document</div><div class="card-tag">PDF · JPG · PNG</div></div>
+          <div class="form-group"><label class="form-label">Select Program Submission <span class="req">*</span></label>
+            <select id="partList" class="form-control"><option value="">Loading...</option></select>
+          </div>
+          <div class="form-group"><label class="form-label">Proof Type <span class="req">*</span></label>
+            <select id="proofType" class="form-control">
+              <option>Registration Screenshot</option>
+              <option>Internship Completion Certificate</option>
+              <option>Course Completion Certificate</option>
+              <option>Final Report / Project Screenshot</option>
+              <option>Offer Letter</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Upload File <span class="req">*</span></label>
+            <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+              <div class="upload-icon">📎</div>
+              <div class="upload-text">Click to upload or drag & drop</div>
+              <div class="upload-hint">Accepted: PDF, JPG, PNG (max 5MB)</div>
+              <div id="fileLabel" style="margin-top:10px;font-size:13px;color:var(--primary);font-weight:600;"></div>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none;" onchange="handleFile(this)"/>
+          </div>
+          <button class="btn btn-primary btn-lg" onclick="uploadProof()">📎 Upload Proof</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">Uploaded Proofs</div></div>
+          <div id="proofsList"><p class="text-muted">Loading...</p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="shared.js"></script>
+  <script>
+    const user = requireStudent();
+    let selectedFile = null;
+    if (user) {
+      document.getElementById('navUser').textContent = user.name;
+      document.getElementById('sidebarLinks').innerHTML = buildStudentNav('upload.html');
+      loadParticipations();
+      renderProofs();
+    }
+
+    function loadParticipations() {
+      const parts = DB.getArr('participation').filter(p => p.studentEmail===user.email);
+      const sel = document.getElementById('partList');
+      if (parts.length === 0) { sel.innerHTML = '<option>No submissions found – submit participation first</option>'; return; }
+      sel.innerHTML = parts.map((p,i) => `<option value="${i}">${p.program} (${p.status})</option>`).join('');
+    }
+
+    function handleFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const allowed = ['application/pdf','image/jpeg','image/png'];
+      if (!allowed.includes(file.type)) { showAlert('alertBox','Only PDF, JPG, PNG files allowed.','error'); return; }
+      if (file.size > 5*1024*1024) { showAlert('alertBox','File size exceeds 5MB.','error'); return; }
+      selectedFile = file;
+      document.getElementById('fileLabel').textContent = `✅ ${file.name} (${(file.size/1024).toFixed(0)} KB)`;
+    }
+
+    // Drag and drop
+    const dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('dragover');
+      const fi = document.getElementById('fileInput');
+      fi.files = e.dataTransfer.files;
+      handleFile(fi);
+    });
+
+    function uploadProof() {
+      if (!selectedFile) return showAlert('alertBox','Please select a file.','error');
+      const partIdx = document.getElementById('partList').value;
+      const parts = DB.getArr('participation').filter(p => p.studentEmail===user.email);
+      const selected = parts[+partIdx];
+      if (!selected) return showAlert('alertBox','Please select a program submission.','error');
+
+      DB.push('proofs', {
+        id: genId('PRF'), studentEmail: user.email,
+        name: user.name, dept: user.dept,
+        program: selected.program,
+        proofType: document.getElementById('proofType').value,
+        fileName: selectedFile.name, fileType: selectedFile.type,
+        status: 'Under Review', remark: '',
+        uploadedDate: new Date().toISOString().split('T')[0]
+      });
+
+      selectedFile = null;
+      document.getElementById('fileLabel').textContent = '';
+      document.getElementById('fileInput').value = '';
+      showAlert('alertBox','Proof uploaded successfully! Pending admin review.','success');
+      renderProofs();
+    }
+
+    function renderProofs() {
+      const proofs = DB.getArr('proofs').filter(p => p.studentEmail===user.email);
+      const el = document.getElementById('proofsList');
+      if (proofs.length === 0) { el.innerHTML = '<p class="text-muted">No proofs uploaded yet.</p>'; return; }
+      el.innerHTML = proofs.map(p => `
+        <div style="padding:14px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);margin-bottom:10px;">
+          <div style="font-weight:600;font-size:13.5px;">${p.program}</div>
+          <div style="font-size:12px;color:var(--text2);margin:4px 0;">${p.proofType}</div>
+          <div class="text-mono" style="margin-bottom:8px;">📄 ${p.fileName}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            ${badgeHTML(p.status)}
+            <span class="text-mono">${formatDate(p.uploadedDate)}</span>
+          </div>
+          ${p.remark ? `<div style="margin-top:8px;padding:8px;background:#fff;border-radius:6px;font-size:12px;color:var(--danger);">⚠️ Admin remark: ${p.remark}</div>` : ''}
+        </div>`).join('');
+    }
+  </script>
+</body>
+</html>
