@@ -1,4 +1,5 @@
 const express = require("express");
+const { db } = require("./firebase"); // Import Firebase db
 const cors = require("cors");
 
 const app = express();
